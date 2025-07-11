@@ -3,3 +3,4 @@
 
 #cache
 modules/__pycache__/*
+cache/*
