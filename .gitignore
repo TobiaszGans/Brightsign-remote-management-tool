@@ -1,0 +1,5 @@
+#Enviorment
+.venv/
+
+#cache
+modules/__pycache__/*
