@@ -43,10 +43,15 @@ elif st.session_state[key] == 'singleplayer':
     else:
         disable_button = False
 
-    if st.button('Continue', disabled=disable_button):
-        st.session_state.login_info = login_info
-        go_to(key, 'uploadAutorun')
-        st.rerun()
+    col1,col2 = st.columns([8,1])
+    with col1:
+        if st.button('Continue', disabled=disable_button):
+            st.session_state.login_info = login_info
+            go_to(key, 'uploadAutorun')
+            st.rerun()
+    with col2:
+        st.button('Back to menu', use_container_width=True, on_click=lambda: go_to(key, 'menu'))
+    
 
 elif st.session_state[key] == 'uploadAutorun':
     st.write('Please upload a current autorun file.')
@@ -264,7 +269,12 @@ elif st.session_state[key] == 'multiplayer':
         st.session_state.autorun = autorun
         disable_button=False
 
-    st.button('Continue', disabled=disable_button, on_click=lambda: go_to(key, 'validate_csv'))
+    
+    col1,col2 = st.columns([8,1])
+    with col1:
+        st.button('Continue', disabled=disable_button, on_click=lambda: go_to(key, 'validate_csv'))
+    with col2:
+        st.button('Back to menu', use_container_width=True, on_click=lambda: go_to(key, 'menu'))
 
 elif st.session_state[key] == 'validate_csv':
     with st.spinner('Validating uploaded list'):
@@ -306,11 +316,12 @@ elif st.session_state[key] == 'validate_csv':
             st.rerun()
         else:
             go_to(key, 'process_players')
+            u.clear_screen()
+            time.sleep(1)
             st.rerun()
 
 elif st.session_state[key] == 'process_players':
     players = st.session_state.players
-    players['status'] = 'Initializing'
     table_placeholder = st.empty()
 
     # Lock for thread-safe updates
@@ -379,7 +390,7 @@ elif st.session_state[key] == 'process_players':
             disable_autorun = bsp.disable_autorun(url=address, port=port, login='admin', password=password)
             if disable_autorun.status_code == 200:
                 with lock:
-                    players.at[index, 'status'] = 'Disabled Autorun'
+                    players.at[index, 'status'] = 'Disabling Autorun'
             else:
                 time.sleep(10)
                 disable_autorun = bsp.disable_autorun(url=address, port=port, login='admin', password=password)
@@ -421,7 +432,7 @@ elif st.session_state[key] == 'process_players':
             
             if format_sd.status_code != 200:
                 # Failed, trying again
-                time.sleep(5)
+                time.sleep(10)
                 format_sd = bsp.format_storage(url=address, port=port, login='admin', password=password)
                 if format_sd.status_code != 200:
                     with lock:
@@ -489,27 +500,55 @@ elif st.session_state[key] == 'process_players':
                 players.at[index, 'status'] = f'Unexpected error: {str(e)}'
 
         
-
-
     # UI
-    threads = []
-    table_placeholder = st.empty()
+    u.st_init("already_processed", False)
+    if not st.session_state["already_processed"]:
+        players['status'] = 'Initializing'
+        threads = []
+        table_placeholder = st.empty()
 
-    with ThreadPoolExecutor(max_workers=50) as executor:
-        futures = []
-        for idx, row in players.iterrows():
-            future = executor.submit(process_player, idx, row['address'], row['password'], row['serial'], st.session_state.autorun)
-            futures.append(future)
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = []
+            for idx, row in players.iterrows():
+                future = executor.submit(process_player, idx, row['address'], row['password'], row['serial'], st.session_state.autorun)
+                futures.append(future)
 
-        # While threads are running, keep refreshing the table
-        while any(not f.done() for f in futures):
-            with lock:
-                table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
-            time.sleep(1)
+            # While threads are running, keep refreshing the table
+            while any(not f.done() for f in futures):
+                with lock:
+                    table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+                time.sleep(1)
 
-    # Final update
-    with lock:
-        table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+        # Final update
+        with lock:
+            table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+        
+        st.session_state.players = players
+        st.session_state.already_processed = True
+    players['is_error'] = players['status'] != 'Reinstall Complete'
+        
+    # Error Highlighting
+    def highlight_errors(row):
+        if row['is_error']:
+            return ['background-color: rgba(255, 0, 0, 0.2)'] * len(row)
+        return [''] * len(row)
+
+    styled_df = players.style.apply(highlight_errors, axis=1)
+
+    table_placeholder.dataframe(styled_df, hide_index=True, column_order=['address', 'serial', 'status'])
+    
     st.success("All players processed.")
 
-#st.write(st.session_state)
+    fails_df = players.loc[(players['is_error'] == True)]
+    fails_file = fails_df.drop(columns=['password', 'is_error']).to_csv(index=False)
+
+    c1, c2, c3 = st.columns([1,1,1])
+    with c1:
+        st.download_button('Download error players', data=fails_file, file_name='Reinstal Error Players.csv', use_container_width=True)
+    with c3:    
+        if st.button('Process another batch', use_container_width=True):
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+                key = 'reinstall'
+                u.st_init(key, 'menu')
+            st.rerun()

@@ -8,6 +8,12 @@ def st_init(key, state):
 def go_to(key, state):
     st.session_state[key] = state
 
+def clear_screen():
+    # Use at the end of a short state or in an emtpy state before a long process
+    display = st.empty()
+    # the below is the fix
+    for i in range(0, 100):
+        st.markdown(" ")
 
 def upload_template():
     template_list = [
