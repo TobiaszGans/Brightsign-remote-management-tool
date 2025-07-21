@@ -3,7 +3,8 @@ from modules import utils as u, brightsign_API as bsp
 from modules.utils import go_to
 import time
 import pandas as pd
-import base64
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 st.set_page_config(
     page_title="Reinstall Appspace",
@@ -22,7 +23,7 @@ if st.session_state[key] == 'menu':
     with col1:
         st.button('Single Player Mode', use_container_width=True, on_click=lambda: go_to(key, 'singleplayer'))
     with col2:
-        st.button('Multi Player Mode', use_container_width=True, on_click=lambda: go_to(key, 'multiplayer') ,disabled=True)
+        st.button('Multi Player Mode', use_container_width=True, on_click=lambda: go_to(key, 'multiplayer'))
 
 elif st.session_state[key] == 'singleplayer':
     u.st_init('fail', False)
@@ -216,9 +217,9 @@ elif st.session_state[key] == 'reboot':
     else:
         st.write('Command failed, trying again in 10 seconds')
         time.sleep(10)
-        response = bsp.disable_autorun(url=login_info.url, port=port, login=login_info.login, password=login_info.password)
-        if response.status_code != 200:
-            st.session_state.error_message = 'Failed to disable autorun'
+        reboot = bsp.reboot(url=login_info.url, port=port, login=login_info.login, password=login_info.password)
+        if reboot.status_code != 200:
+            st.session_state.error_message = 'Failed to reboot the player'
             st.session_state.fail = True
             st.error(st.session_state.error_message)
             quit()
@@ -243,4 +244,272 @@ elif st.session_state[key] == 'reboot':
                 time.sleep(2)
 
         st.write('Complete. Please verify')    
+
+
+elif st.session_state[key] == 'multiplayer':
+    u.st_init('error', False)
+    if st.session_state.error:
+        st.error(st.session_state.error_message)
+    playerfile = st.file_uploader('Please upload a csv file containing device addresses, device passwords, and device serial numbers (optional).', type='csv')
+    template = u.upload_template()
+    st.download_button('Download csv file template', data=template, file_name='Player upload template.csv')
+
+    autorun = st.file_uploader('Please upload the autorun to be installed on the players.', type='zip')
+
+    if not playerfile or not autorun:
+        disable_button = True
+    else:
+        players = pd.read_csv(playerfile)
+        st.session_state.players = players
+        st.session_state.autorun = autorun
+        disable_button=False
+
+    st.button('Continue', disabled=disable_button, on_click=lambda: go_to(key, 'validate_csv'))
+
+elif st.session_state[key] == 'validate_csv':
+    with st.spinner('Validating uploaded list'):
+        st.session_state.error = False
+        players = st.session_state.players
+        
+        expected_columns = ['address','password','serial']
+        required_columns = set(['address','password'])
+        df_columns = players.columns.values.tolist()
+        df_columns_set = set(df_columns)
+        
+        columns_invalid = expected_columns != df_columns
+        has_required_columns = required_columns.issubset(df_columns_set)
+        if not has_required_columns:
+            st.session_state['error'] = True
+            st.session_state.error_message = "The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure."
+            go_to(key, 'multiplayer')
+            st.rerun()
+
+        address_invalid = players['address'].isna().any()
+        password_invalid = players['password'].isna().any()
+
+        if columns_invalid or address_invalid or password_invalid:
+            st.session_state['error'] = True
+            error_message = "The uploaded file has the following issue(s): "
+
+            issues = []
+
+            if columns_invalid:
+                issues.append("The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure.")
+            if address_invalid:
+                issues.append("Some cells in the 'address' column are empty. All addresses must be provided.")
+            if password_invalid:
+                issues.append("Some cells in the 'password' column are empty. All passwords must be provided.")
+
+            error_message += " ".join(issues)
+            st.session_state.error_message = error_message
+            go_to(key, 'multiplayer')
+            st.rerun()
+        else:
+            go_to(key, 'process_players')
+            st.rerun()
+
+elif st.session_state[key] == 'process_players':
+    players = st.session_state.players
+    players['status'] = 'Initializing'
+    table_placeholder = st.empty()
+
+    # Lock for thread-safe updates
+    lock = threading.Lock()
+
+    # Shared flag to track completion
+    processing_done = False
+
+
+
+    # Threaded function (logic only)
+    def process_player(index, address, password, serial, file):
+        try:
+            with lock:
+                players.at[index, 'status'] = 'Connecting to player'
+
+            # Ping
+            ping = bsp.ping(address)
+            if not ping:
+                with lock:
+                    players.at[index, 'status'] = 'No ping, attempting to connect anyway'
+
+            # Try reaching DWS
+            port = None
+            for p in (8080, 80):
+                if bsp.reachUrl(address, p):
+                    port = p
+                    break
+
+            if port is None and ping:
+                with lock:
+                    players.at[index, 'status'] = 'Could not connect to player on ports 80 or 8080'
+                return
+            elif port is None and not ping:
+                with lock:
+                    players.at[index, 'status'] = 'Could not reach the player'
+                return
+            
+            
+            with lock:
+                players.at[index, 'status'] = f'Connected on port {port}, checking API access'
+
+            # Attempt login with password
+            login = bsp.init_login(url=address, port=port, login='admin', password=password)
+
+            if login.status_code >= 400:
+                if serial:
+                    with lock:
+                        players.at[index, 'status'] = 'Password failed, trying serial number'
+                    login = bsp.init_login(url=address, port=port, login='admin', password=serial)
+                    password = serial
+
+                    if login.status_code >= 400:
+                        with lock:
+                            players.at[index, 'status'] = 'Login failed with both password and serial'
+                        return
+                else:
+                    with lock:
+                        players.at[index, 'status'] = 'Login failed with provided password'
+                    return
+
+
+            # Disable Autorun
+            with lock:
+                players.at[index, 'status'] = 'Successfully connected, disabling Autorun'
+            disable_autorun = bsp.disable_autorun(url=address, port=port, login='admin', password=password)
+            if disable_autorun.status_code == 200:
+                with lock:
+                    players.at[index, 'status'] = 'Disabled Autorun'
+            else:
+                time.sleep(10)
+                disable_autorun = bsp.disable_autorun(url=address, port=port, login='admin', password=password)
+                if disable_autorun.status_code != 200:
+                    with lock:
+                        players.at[index, 'status'] =  'Failed to disable autorun'
+                    return
+
+            # Wait for player to be back online
+            time.sleep(5)
+            with lock:
+                players.at[index, 'status'] = 'Disabled Autorun, Awaiting player response'
+            ping_response = False
+            max_wait = 60
+            elapsed = 0
+            while not ping_response and elapsed < max_wait:
+                ping_response = bsp.ping(address)
+                time.sleep(2)
+                elapsed += 2
+            if not ping_response:
+                with lock:
+                    players.at[index, 'status'] = 'Player did not respond to ping in time'
+                return
+            dws = False
+            elapsed = 0
+            while not dws and elapsed < max_wait:
+                dws = bsp.reachUrl(address, port)
+                time.sleep(2)
+                elapsed += 2
+            if not dws:
+                with lock:
+                    players.at[index, 'status'] = 'Failed to connect to player after rebooting the player post upload'
+                    return
+
+            # Format SD Card
+            with lock:
+                players.at[index, 'status'] = 'Formating SD card'
+            format_sd = bsp.format_storage(url=address, port=port, login='admin', password=password)
+            
+            if format_sd.status_code != 200:
+                # Failed, trying again
+                time.sleep(5)
+                format_sd = bsp.format_storage(url=address, port=port, login='admin', password=password)
+                if format_sd.status_code != 200:
+                    with lock:
+                        players.at[index, 'status'] = 'Failed to format SD card'
+                    return
+            
+            # Upload Autorun
+            with lock:
+                players.at[index, 'status'] ='SD Card formatted, uploading Autorun'
+
+            bytes_data = file.getvalue()
+            files = {
+                    'file[0]': ('autorun.zip', bytes_data, 'application/zip')
+                }
+            upload = bsp.upload_file(url=address, port=port, login='admin', password=password, file=files)
+            if upload.status_code != 200:
+                with lock:
+                    players.at[index, 'status'] = 'Failed to upload autorun'
+                return
+
+            # Last Reboot
+            with lock:
+                players.at[index, 'status'] = 'Uploaded Autorun. Rebooting...'
+            reboot = bsp.reboot(url=address, port=port, login='admin', password=password)
+            if reboot.status_code != 200:
+                time.sleep(10)
+                reboot = bsp.reboot(url=address, port=port, login='admin', password=password)
+                if reboot.status_code != 200:
+                    with lock:
+                        players.at[index, 'status'] = 'Failed to reboot the player after uploading the Autorun'
+                    return
+            
+            # Wait for player to be back online again 
+            time.sleep(5)
+            with lock:
+                players.at[index, 'status'] = 'Rebooting, awaiting player response'
+            ping_response = False
+            max_wait = 60
+            elapsed = 0
+            while not ping_response and elapsed < max_wait:
+                ping_response = bsp.ping(address)
+                time.sleep(2)
+                elapsed += 2
+            if not ping_response:
+                with lock:
+                    players.at[index, 'status'] = 'Player did not respond to ping in time'
+                return
+            dws = False
+            elapsed = 0
+            while not dws and elapsed < max_wait:
+                dws = bsp.reachUrl(address, port)
+                time.sleep(2)
+                elapsed += 2
+            if not dws:
+                with lock:
+                    players.at[index, 'status'] = 'Failed to connect to player after rebooting the player post upload'
+                    return
+            
+            
+            # Process Complete
+            with lock:
+                players.at[index, 'status'] = 'Reinstall Complete'
+        except Exception as e:
+            with lock:
+                players.at[index, 'status'] = f'Unexpected error: {str(e)}'
+
+        
+
+
+    # UI
+    threads = []
+    table_placeholder = st.empty()
+
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = []
+        for idx, row in players.iterrows():
+            future = executor.submit(process_player, idx, row['address'], row['password'], row['serial'], st.session_state.autorun)
+            futures.append(future)
+
+        # While threads are running, keep refreshing the table
+        while any(not f.done() for f in futures):
+            with lock:
+                table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+            time.sleep(1)
+
+    # Final update
+    with lock:
+        table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+    st.success("All players processed.")
+
 #st.write(st.session_state)
