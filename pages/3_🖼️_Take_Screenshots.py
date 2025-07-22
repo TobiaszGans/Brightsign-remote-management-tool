@@ -234,13 +234,18 @@ elif st.session_state[key] == 'convert_multi':
 
 
 elif st.session_state[key] == 'multi_generate':
-    u.st_init('has_processed', False)
-    players = st.session_state.players.copy()
+    players = st.session_state.players
     lock = threading.Lock()
-    if st.session_state.strip == 1:
-        st.toast(f'One player was removed from the list, because it was not reachable.')
-    elif st.session_state.strip > 1:
-        st.toast(f'{st.session_state.strip} players were removed from the list, because they were not reachable.')
+    u.st_init('toasted', False)
+    if not st.session_state.toasted:
+        if st.session_state.strip == 1:
+            st.toast(f'One player was removed from the list, because it was not reachable.')
+            st.session_state.toasted = True
+        elif st.session_state.strip > 1:
+            st.toast(f'{st.session_state.strip} players were removed from the list, because they were not reachable.')
+            st.session_state.toasted = True
+        else:
+            st.session_state.toasted = True
 
     def process_player(index, address, password, serial):
         """Threaded function to get a screenshot from a player."""
@@ -258,26 +263,25 @@ elif st.session_state[key] == 'multi_generate':
             with lock:
                 players.at[index, 'Screenshot'] = f'Error: {e}'
 
-    if not st.session_state.has_processed:
-        players['Screenshot'] = 'Initializing'
+    players['Screenshot'] = 'Initializing'
 
-        with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [
-                executor.submit(
-                    process_player, idx, row['address'], row['password'], row['serial']
-                )
-                for idx, row in players.iterrows()
-            ]
+    with ThreadPoolExecutor(max_workers=50) as executor:
+        futures = [
+            executor.submit(
+                process_player, idx, row['address'], row['password'], row['serial']
+            )
+            for idx, row in players.iterrows()
+        ]
 
-            with st.spinner('Generating snapshots...'):
-                while any(not f.done() for f in futures):
-                    time.sleep(1)  # Just wait; updates aren't needed live here
+        with st.spinner('Generating snapshots...'):
+            while any(not f.done() for f in futures):
+                time.sleep(1)  # Just wait; updates aren't needed live here
 
-        # Store updated player data and change view state
-        st.session_state.players = players
-        st.session_state.has_processed = True
-        go_to(key, 'display_screenshots')
-        st.rerun()
+    # Store updated player data and change view state
+    st.session_state.players = players
+    st.session_state.has_processed = True
+    go_to(key, 'display_screenshots')
+    st.rerun()
 
 
 elif st.session_state[key] == 'display_screenshots':
