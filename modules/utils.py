@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import os, shutil, stat, time, subprocess
+import os, shutil, stat, time, subprocess, json
 
 def st_init(key, state):
     if key not in st.session_state:
@@ -89,3 +89,40 @@ def select_autourn():
             with open(f'./cache/autoruns/{ar_selection}/autorun.zip', 'rb') as file:
                 autorun = file.read()
         return autorun
+    
+def validate_csv(players:pd.DataFrame) -> list:
+    expected_columns = ['address','password','serial']
+    required_columns = set(['address','password'])
+    df_columns = players.columns.values.tolist()
+    df_columns_set = set(df_columns)
+    
+    columns_invalid = expected_columns != df_columns
+    has_required_columns = required_columns.issubset(df_columns_set)
+    if not has_required_columns:
+        valid = False
+        error_message = "The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure."
+        return[valid, error_message]
+
+    address_invalid = players['address'].isna().any()
+    password_invalid = players['password'].isna().any()
+
+    if columns_invalid or address_invalid or password_invalid:
+        st.session_state['error'] = True
+        error_message = "The uploaded file has the following issue(s): "
+
+        issues = []
+
+        if columns_invalid:
+            issues.append("The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure.")
+        if address_invalid:
+            issues.append("Some cells in the 'address' column are empty. All addresses must be provided.")
+        if password_invalid:
+            issues.append("Some cells in the 'password' column are empty. All passwords must be provided.")
+
+        error_message += " ".join(issues)
+        valid = False
+        return[valid, error_message]
+    else:
+        valid = True
+        error_message = None
+        return[valid, error_message]

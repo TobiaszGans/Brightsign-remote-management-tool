@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-import os
-import subprocess
-import requests
 from requests.auth import HTTPDigestAuth
+import base64, json, os, subprocess, requests
+from io import BytesIO
+from PIL import Image
 
 @dataclass
 class credentials:
@@ -59,7 +59,7 @@ def reachUrl(IP, port):
         return False
     
 
-def init_login(url, port, login, password) -> bool:
+def init_login(url, port, login, password):
     endpoint = '/api/v1/info/'
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.get(full_url, auth=HTTPDigestAuth(login, password))
@@ -93,3 +93,29 @@ def reboot(url, port, login, password):
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.put(full_url, auth=HTTPDigestAuth(login, password))
     return r
+
+def capture_snapshot(url, port, login, password):
+    endpoint = '/api/v1/snapshot/'
+    full_url = f'http://{url}:{port}{endpoint}'
+    body = {
+        "width": 960,
+        "height": 540
+    }
+    r = requests.post(full_url, auth=HTTPDigestAuth(login, password), json=body)
+    return r
+
+def capture_snapshot_thumbnail(url, port, login, password):
+    response = capture_snapshot(url, port, login, password)
+    payload = response.text
+    payload_json = json.loads(payload)
+    base64_image = payload_json['data']['result']['remoteSnapshotThumbnail']
+    if base64_image.startswith("data:image"):
+        base64_image = base64_image.split(",")[1]
+    image_bytes = base64.b64decode(base64_image)
+    image = Image.open(BytesIO(image_bytes))
+    return image
+
+def get_device_name(url, port, login, password):
+    response = init_login(url, port, login, password)
+    device_info = json.loads(response.text)
+    return device_info['data']['result']['networking']['result']['name']

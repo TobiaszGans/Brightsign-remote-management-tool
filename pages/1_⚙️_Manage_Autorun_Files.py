@@ -1,4 +1,4 @@
-import os, glob, shutil, time
+import os, glob, time
 import streamlit as st
 from modules import utils as u
 from modules.utils import go_to
@@ -43,9 +43,10 @@ elif st.session_state[key] == 'upload_new':
         st.rerun()
 
 elif st.session_state[key] == 'check_cache':
+    cache_folder_exists = os.path.exists('./cache/autoruns/')
     autorun = st.session_state.autorun
     version = st.session_state.version
-    if not cache_folder_exists:
+    if not cache_folder_exists():
         os.mkdir('./cache/autoruns/')
     version_exist = os.path.exists(f'./cache/autoruns/{version}')
     if version_exist:

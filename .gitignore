@@ -3,3 +3,6 @@
 
 #cache
 modules/__pycache__/*
+
+#not ready
+modules/updater.py

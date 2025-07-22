@@ -158,8 +158,7 @@ elif st.session_state[key] == 'disable_autorun':
                 attempt = 1
                 while not dws:
                     with st.empty():
-                        st.write(f'''Attempting to connect to the player\n
-                                 Attempt {attempt}''')
+                        st.write(f'''Attempting to connect to the player\nAttempt {attempt}''')
                         dws = bsp.reachUrl(login_info.url, port)
                         attempt = attempt + 1
                         time.sleep(2)
@@ -244,7 +243,17 @@ elif st.session_state[key] == 'reboot':
                 attempt = attempt + 1
                 time.sleep(2)
 
-        st.write('Complete. Please verify')    
+        st.write('Complete. Please verify')
+    
+    c1, c2, c3 = st.columns([1,1,1])
+    with c3:    
+        if st.button('Go back to menu', use_container_width=True):
+            for k in list(st.session_state.keys()):
+                del st.session_state[k]
+                key = 'reinstall'
+                u.st_init(key, 'menu')
+            st.rerun()
+    
 
 
 elif st.session_state[key] == 'multiplayer':
@@ -275,40 +284,12 @@ elif st.session_state[key] == 'multiplayer':
 
 elif st.session_state[key] == 'validate_csv':
     with st.spinner('Validating uploaded list'):
-        st.session_state.error = False
         players = st.session_state.players
-        
-        expected_columns = ['address','password','serial']
-        required_columns = set(['address','password'])
-        df_columns = players.columns.values.tolist()
-        df_columns_set = set(df_columns)
-        
-        columns_invalid = expected_columns != df_columns
-        has_required_columns = required_columns.issubset(df_columns_set)
-        if not has_required_columns:
+        st.session_state.error = False
+        validation = u.validate_csv(players)
+        if not validation[0]:
             st.session_state['error'] = True
-            st.session_state.error_message = "The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure."
-            go_to(key, 'multiplayer')
-            st.rerun()
-
-        address_invalid = players['address'].isna().any()
-        password_invalid = players['password'].isna().any()
-
-        if columns_invalid or address_invalid or password_invalid:
-            st.session_state['error'] = True
-            error_message = "The uploaded file has the following issue(s): "
-
-            issues = []
-
-            if columns_invalid:
-                issues.append("The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure.")
-            if address_invalid:
-                issues.append("Some cells in the 'address' column are empty. All addresses must be provided.")
-            if password_invalid:
-                issues.append("Some cells in the 'password' column are empty. All passwords must be provided.")
-
-            error_message += " ".join(issues)
-            st.session_state.error_message = error_message
+            st.session_state.error_message = validation[1]
             go_to(key, 'multiplayer')
             st.rerun()
         else:
@@ -316,6 +297,7 @@ elif st.session_state[key] == 'validate_csv':
             u.clear_screen()
             time.sleep(1)
             st.rerun()
+        
 
 elif st.session_state[key] == 'process_players':
     players = st.session_state.players
