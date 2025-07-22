@@ -1,10 +1,9 @@
 import streamlit as st
 from modules import utils as u, brightsign_API as bsp
 from modules.utils import go_to
-import time
+import time, os, threading
 import pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
+from concurrent.futures import ThreadPoolExecutor
 
 st.set_page_config(
     page_title="Reinstall Appspace",
@@ -55,8 +54,7 @@ elif st.session_state[key] == 'singleplayer':
 
 elif st.session_state[key] == 'uploadAutorun':
     st.write('Please upload a current autorun file.')
-    file = st.file_uploader('Upload autorun.zip', type='zip')
-
+    file = u.select_autourn()
     if file is not None:
         disable_button2 = False
     else:
@@ -197,9 +195,7 @@ elif st.session_state[key] == 'upload':
     with st.spinner('Uploading autorun'):
         login_info = st.session_state.login_info
         port = st.session_state.port
-        uploaded_file = st.session_state.autorun
-        #st.write(uploaded_file)
-        bytes_data = uploaded_file.getvalue()
+        bytes_data = st.session_state.autorun
         files = files = {
                 'file[0]': ('autorun.zip', bytes_data, 'application/zip')
             }
@@ -257,11 +253,12 @@ elif st.session_state[key] == 'multiplayer':
         st.error(st.session_state.error_message)
     playerfile = st.file_uploader('Please upload a csv file containing device addresses, device passwords, and device serial numbers (optional).', type='csv')
     template = u.upload_template()
+
     st.download_button('Download csv file template', data=template, file_name='Player upload template.csv')
 
-    autorun = st.file_uploader('Please upload the autorun to be installed on the players.', type='zip')
+    autorun = u.select_autourn()
 
-    if not playerfile or not autorun:
+    if not playerfile or autorun is None:
         disable_button = True
     else:
         players = pd.read_csv(playerfile)
@@ -443,7 +440,7 @@ elif st.session_state[key] == 'process_players':
             with lock:
                 players.at[index, 'status'] ='SD Card formatted, uploading Autorun'
 
-            bytes_data = file.getvalue()
+            bytes_data = file
             files = {
                     'file[0]': ('autorun.zip', bytes_data, 'application/zip')
                 }
@@ -462,8 +459,13 @@ elif st.session_state[key] == 'process_players':
                 reboot = bsp.reboot(url=address, port=port, login='admin', password=password)
                 if reboot.status_code != 200:
                     with lock:
-                        players.at[index, 'status'] = 'Failed to reboot the player after uploading the Autorun'
-                    return
+                        players.at[index, 'status'] = 'Failed to reboot the player trying again in 30 seconds'
+                    time.sleep(30)
+                    reboot = bsp.reboot(url=address, port=port, login='admin', password=password)
+                    if reboot.status_code != 200:
+                        with lock:
+                            players.at[index, 'status'] = 'Failed to reboot the player after uploading the autorun'
+                        return
             
             # Wait for player to be back online again 
             time.sleep(5)
@@ -488,8 +490,17 @@ elif st.session_state[key] == 'process_players':
                 elapsed += 2
             if not dws:
                 with lock:
-                    players.at[index, 'status'] = 'Failed to connect to player after rebooting the player post upload'
-                    return
+                    players.at[index, 'status'] = 'Failed to connect to player after rebooting retrying in 30 seconds'
+                    time.sleep(30)
+                    elapsed = 0
+                    while not dws and elapsed < max_wait:
+                        dws = bsp.reachUrl(address, port)
+                        time.sleep(2)
+                        elapsed += 2
+                    if not dws:
+                        with lock:
+                            players.at[index, 'status'] = 'Failed to connect to player after rebooting the player'
+                        return
             
             
             # Process Complete
