@@ -1,7 +1,7 @@
 import streamlit as st
 from modules import utils as u, brightsign_API as bsp
 from modules.utils import go_to
-import time, os, threading
+import time, json, threading
 import pandas as pd
 from concurrent.futures import ThreadPoolExecutor
 
@@ -333,10 +333,12 @@ elif st.session_state[key] == 'process_players':
             if port is None and ping:
                 with lock:
                     players.at[index, 'status'] = 'Could not connect to player on ports 80 or 8080'
+                    players.at[index, 'name'] = 'Could not reach the player'
                 return
             elif port is None and not ping:
                 with lock:
                     players.at[index, 'status'] = 'Could not reach the player'
+                    players.at[index, 'name'] = 'Could not reach the player'
                 return
             
             
@@ -356,13 +358,19 @@ elif st.session_state[key] == 'process_players':
                     if login.status_code >= 400:
                         with lock:
                             players.at[index, 'status'] = 'Login failed with both password and serial'
+                            players.at[index, 'name'] = 'Could not reach the player'
                         return
                 else:
                     with lock:
                         players.at[index, 'status'] = 'Login failed with provided password'
+                        players.at[index, 'name'] = 'Could not reach the player'
                     return
-
-
+            
+            # Set device name
+            device_info = json.loads(login.text)
+            name = device_info['data']['result']['networking']['result']['name']
+            players.at[index, 'name'] = name
+            
             # Disable Autorun
             with lock:
                 players.at[index, 'status'] = 'Successfully connected, disabling Autorun'
@@ -497,6 +505,7 @@ elif st.session_state[key] == 'process_players':
     u.st_init("already_processed", False)
     if not st.session_state["already_processed"]:
         players['status'] = 'Initializing'
+        players['name'] = 'Initializing'
         threads = []
         table_placeholder = st.empty()
 
@@ -509,12 +518,12 @@ elif st.session_state[key] == 'process_players':
             # While threads are running, keep refreshing the table
             while any(not f.done() for f in futures):
                 with lock:
-                    table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+                    table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'name', 'status'])
                 time.sleep(1)
 
         # Final update
         with lock:
-            table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'status'])
+            table_placeholder.dataframe(players, hide_index=True, column_order=['address', 'serial', 'name', 'status'])
         
         st.session_state.players = players
         st.session_state.already_processed = True
@@ -528,7 +537,7 @@ elif st.session_state[key] == 'process_players':
 
     styled_df = players.style.apply(highlight_errors, axis=1)
 
-    table_placeholder.dataframe(styled_df, hide_index=True, column_order=['address', 'serial', 'status'])
+    table_placeholder.dataframe(styled_df, hide_index=True, column_order=['address', 'serial', 'name', 'status'])
     
     st.success("All players processed.")
 
