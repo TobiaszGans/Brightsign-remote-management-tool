@@ -139,7 +139,7 @@ elif st.session_state[key] == 'single_continuous':
     login = 'admin'
     st.markdown(f'#### {device_name}')
     u.st_init('continuous', False)
-    delay = st.slider('Refresh period (seconds)', min_value=5, max_value=60, step=1)
+    delay = st.slider('Refresh period (seconds)', min_value=5, max_value=60, step=1, value=15)
 
     c1,c2,c3 = st.columns([2,3,2])
     with c1:
@@ -154,11 +154,22 @@ elif st.session_state[key] == 'single_continuous':
     with c3:
         st.button('Return to single snapshot', use_container_width=True, on_click=lambda: go_to(key, 'single_screenshot'))
     
-    with st.empty():
-        while st.session_state.continuous:
-            image = bsp.capture_snapshot_thumbnail(url=url,port=port,password=password,login=login)
-            st.image(image, caption="Remote Snapshot")
-            time.sleep(delay)
+    c_img, c_spinner = st.columns([4, 1])
+
+    image_placeholder = c_img.empty()
+    spinner_placeholder = c_spinner.empty()
+
+    while st.session_state.continuous:
+        with spinner_placeholder:
+            with st.spinner("Capturing new snapshot..."):
+                image = bsp.capture_snapshot_thumbnail(
+                    url=url,
+                    port=port,
+                    password=password,
+                    login=login
+                )
+        image_placeholder.image(image, caption="Remote Snapshot")
+        time.sleep(delay)
 
 elif st.session_state[key] == 'multi_player':
     u.st_init('error', False)
@@ -293,11 +304,15 @@ elif st.session_state[key] == 'display_screenshots':
 
     for i, (_, row) in enumerate(players.iterrows()):
         name = row.get('Name', f"Player {i}")
+        serial = row.get('serial', f"Player {i}")
         screenshot = row['Screenshot']
         col = col1 if i % 2 == 0 else col2
 
         with col:
-            st.write(f"**{name}**")
+            if pd.isna(serial) or serial == '':
+                st.write(f"**{name}**")
+            else:
+                st.write(f"**{name}** - {serial}")
             if isinstance(screenshot, str):
                 if screenshot.startswith("Error"):
                     st.error(screenshot)
@@ -305,6 +320,7 @@ elif st.session_state[key] == 'display_screenshots':
                     st.warning("Still waiting...")
             else:
                 st.image(screenshot)
+    st.button('Refresh', on_click=lambda: go_to(key, 'multi_generate'), key='refresh2')
 
 # Menu Button
 if st.session_state[key] != 'menu':
