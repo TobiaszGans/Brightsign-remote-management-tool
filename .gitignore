@@ -3,3 +3,6 @@
 
 #cache
 modules/__pycache__/*
+
+#backup folder
+update_backup
