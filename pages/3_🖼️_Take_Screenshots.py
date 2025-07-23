@@ -196,6 +196,8 @@ elif st.session_state[key] == 'multi_verify':
             return response.status_code == 200
         except Exception:
             return False
+    def threaded_try_login(row):
+        return try_login(row['address'], row['password'])
 
     with st.spinner('Validating uploaded list'):
         players = st.session_state.players
@@ -207,10 +209,10 @@ elif st.session_state[key] == 'multi_verify':
             go_to(key, 'multi_player')
             st.rerun()
         else:
-            players['login'] = players.apply(
-                lambda row: try_login(row['address'], row['password']),
-                axis=1
-            )
+            with ThreadPoolExecutor(max_workers=20) as executor:
+                login_results = list(executor.map(threaded_try_login, [row for _, row in players.iterrows()]))
+
+            players['login'] = login_results
             data_before_strip = players.shape[0]
             players = players[players['login'] == True]
             data_after_strip = players.shape[0]
@@ -231,12 +233,15 @@ elif st.session_state[key] == 'multi_verify':
             st.rerun()
 
 elif st.session_state[key] == 'convert_multi':
+    def get_name_threaded(row):
+        return bsp.get_device_name(url=row['address'], port=8080, login='admin', password=row['password'])
+    
     players = st.session_state.players
     with st.spinner('Requesting device names'):
-        players['Name'] = players.apply(
-            lambda row: bsp.get_device_name(url=row['address'], port=8080, login='admin', password=row['password']),
-            axis=1
-        )
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            names = list(executor.map(get_name_threaded, [row for _, row in players.iterrows()]))
+
+        players['Name'] = names
 
         go_to(key, 'multi_generate')
         u.clear_screen()
