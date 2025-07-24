@@ -17,7 +17,7 @@ disable_editing_buttons = not u.check_cache()
 
 st.title('Application Settings')
 if st.session_state[key] == 'menu':
-    o1,o2,o3,o4 = st.columns([1,1,1,1])
+    o1,o2,o4 = st.columns([1,1,1]) # o1,o2,o3,o4 = st.columns([1,1,1,1])
     with o1:
         st.markdown('#### Application Version')
         if st.button('Check for updates', use_container_width=True):
@@ -37,8 +37,8 @@ if st.session_state[key] == 'menu':
         st.button('Upload a new autorun File', use_container_width=True, on_click=lambda:go_to(key, 'upload_new'))
         st.button('Edit existing autorun files', use_container_width=True, disabled=disable_editing_buttons, on_click=lambda:go_to(key, 'edit'))
         st.button('Delete all cached autorun files', use_container_width=True, disabled=disable_editing_buttons, on_click=lambda:go_to(key, 'delete'), type='primary')
-    with o3:
-        st.markdown('#### Option 3')
+    #with o3:
+    #    st.markdown('#### Option 3')
     with o4:
         st.markdown('#### Application Exit')
         st.button('Close application', use_container_width=True,type='primary', on_click= lambda: u.shutdown())
