@@ -15,8 +15,6 @@ with o1:
         update = check_for_update()
         status = update[0]
         message = update[1]
-        st.write(status)
-        st.write(message)
         if status == False:
             st.success(message)
         elif status == True:
