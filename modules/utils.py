@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-import os, shutil, stat, time, subprocess, json
+import os, shutil, stat, time, subprocess, keyboard
 
 def st_init(key, state):
     if key not in st.session_state:
@@ -126,3 +126,10 @@ def validate_csv(players:pd.DataFrame) -> list:
         valid = True
         error_message = None
         return[valid, error_message]
+    
+def shutdown():
+    # Close streamlit browser tab
+    keyboard.press_and_release('ctrl+w')
+    # Terminate streamlit python process
+    time.sleep(2)
+    os._exit(0)
