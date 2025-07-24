@@ -6,6 +6,8 @@ import time
 
 setup.clearTerminal()
 
+APP_VERSION = 'v.0.0.12-alpha'
+
 # Check if running in a virtual enviorment
 if not setup.is_virtual_environment():
     python_executable = setup.get_python_executable()
@@ -29,6 +31,8 @@ if not setup.is_virtual_environment():
 if os.getenv("BOOTSTRAPPED") == "1":
     print("Switched to Virtual enviorment")
 
+print('Launching Application.')
+print(f'App version: {APP_VERSION}')
 # Verify configuration
 verify = setup.verify()
 
@@ -60,13 +64,17 @@ if setup_needed:
 
     final_verify = setup.verify()
     if final_verify.preferences:
+        setup.write_app_version(APP_VERSION)
         print('Setup complete, starting the program.')
         setup_needed = False
         time.sleep(1)
     else:
         print('Setup failed. Please restart the program.\nQuitting...')
         quit()
+    setup.write_app_version(APP_VERSION)
+
 
 if not setup_needed:
     setup.clearTerminal()
+    setup.write_app_version(APP_VERSION)
     subprocess.run([setup.get_python_executable(), "-m", "streamlit", "run", "Home.py"])

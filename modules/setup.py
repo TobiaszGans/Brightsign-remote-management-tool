@@ -46,31 +46,26 @@ def get_required_packages() -> list:
     required_packages = strip_packages(required_packages)
     return required_packages
 
-@dataclass
 class verify:
     preferences: bool
     dependencies: bool
 
     def __init__(self):
-        #Check for preferences file and verify if setup was complete
+        # Check for preferences file and verify if setup was complete
         if os.path.exists('./cache/preferences.json'):
-            with open('./cache/preferences.json', 'r', encoding='UTF-8') as preference_file:
-                preferences = json.loads(preference_file.read())
-                try:
-                    setup_complete = preferences["setupComplete"]
-                    if setup_complete:
-                        self.preferences = True
-                    else:
-                        self.preferences = False
-                except:
-                    self.preferences = False
+            try:
+                with open('./cache/preferences.json', 'r', encoding='UTF-8') as preference_file:
+                    file_data = json.load(preference_file)
+                    self.preferences = file_data.get('setupComplete', False)
+            except (json.JSONDecodeError, IOError):
+                self.preferences = False
         else:
             self.preferences = False
 
-        #Check if all dependencies were installed
+        # Check if all dependencies were installed
         installed_packages = get_installed_packages()
         required_packages = get_required_packages()
-        
+
         required_set = set(required_packages)
         installed_set = set(installed_packages)
         self.dependencies = required_set.issubset(installed_set)
@@ -108,6 +103,20 @@ def install_dependencies():
             print(result.stderr)
         else:
             print(f"Installed {package}")
+
+def write_app_version(version):
+    with open('./cache/preferences.json', 'r') as file:
+        file_data = json.load(file)
+    version_exists = "currentVersion" in file_data
+    if not version_exists:
+        version_key = {"currentVersion":version}
+        file_data.update(version_key)
+        with open('./cache/preferences.json', 'w') as file:
+            file.write(json.dumps(file_data))
+    if version_exists:
+        file_data['currentVersion'] = version
+        with open('./cache/preferences.json', 'w') as file:
+            file.write(json.dumps(file_data))
 
 
 #-----------CLI UTILS-----------
