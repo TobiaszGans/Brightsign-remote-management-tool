@@ -14,6 +14,10 @@ def get_current_version():
         prefs = json.load(f)
     return prefs.get("currentVersion")
 
+
+def get_repo_url():
+    return f"https://github.com/{GITHUB_USER}/{REPO_NAME}/releases/latest"
+
 def get_latest_release_version(user, repo):
     url = f"https://api.github.com/repos/{user}/{repo}/releases/latest"
     response = requests.get(url)
@@ -24,13 +28,12 @@ def get_latest_release_version(user, repo):
 def check_for_update():
     current_version = get_current_version()
     if current_version is None:
-        return "Could not find current version information"
+        return (None ,"Could not find current version information")
         
 
     latest_version = get_latest_release_version(GITHUB_USER, REPO_NAME)
 
     if latest_version != current_version:
-        return f"Update available! Latest version: {latest_version}, Your version: {current_version}"
+        return (True, f"Update available! Latest version: {latest_version}, Your version: {current_version}")
     else:
-        return("You're running the latest version")
-
+        return(False ,"You're running the latest version of the application")

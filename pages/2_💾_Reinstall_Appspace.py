@@ -146,6 +146,7 @@ elif st.session_state[key] == 'disable_autorun':
                     st.write('Command sent successfully.')
             
             ping_response = False
+            time.sleep(2)
             st.write('Waiting for player to respond')
             while not ping_response:
                 ping_response = bsp.ping(login_info.url)
