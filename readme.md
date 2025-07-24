@@ -41,5 +41,18 @@ Save autorun files within the application for future use. This removes the need 
 1. Place all application files in a folder.
 2. Open a terminal in that folder and run:
 
-```bash
+```
 py run.py
+```
+
+This will:
+
+- Automatically create a Python virtual environment
+- Install all required dependencies
+- Launch the app in your default browser using Streamlit
+
+This command is used to run the application every time.
+
+## Contributing
+
+Contributions are welcome. If you'd like to report a bug or suggest a feature, feel free to open an issue or submit a pull request.
