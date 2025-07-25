@@ -119,3 +119,11 @@ def get_device_name(url, port, login, password):
     response = init_login(url, port, login, password)
     device_info = json.loads(response.text)
     return device_info['data']['result']['networking']['result']['name']
+
+def get_logs(url, port, login, password):
+    endpoint = '/api/v1/logs/'
+    full_url = f'http://{url}:{port}{endpoint}'
+    r = requests.get(full_url, auth=HTTPDigestAuth(login, password))
+    r_json = json.loads(r.text)
+    logs = r_json['data']['result']
+    return logs
