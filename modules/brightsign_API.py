@@ -59,21 +59,21 @@ def reachUrl(IP, port):
         return False
     
 
-def init_login(url, port, login, password):
+def init_login(url, port, password, login='admin'):
     endpoint = '/api/v1/info/'
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.get(full_url, auth=HTTPDigestAuth(login, password))
     return r
 
 
-def disable_autorun(url, port, login, password):
+def disable_autorun(url, port, password, login = 'admin'):
     endpoint = '/api/v1/control/reboot'
     full_url = f'http://{url}:{port}{endpoint}'
     body = {"autorun":"disable"}
     r = requests.put(full_url, auth=HTTPDigestAuth(login, password), json=body)
     return r
 
-def format_storage(url, port, login, password):
+def format_storage(url, port, password, login = 'admin'):
     endpoint = '/api/v1/storage/sd/'
     full_url = f'http://{url}:{port}{endpoint}'
     body = {
@@ -82,19 +82,19 @@ def format_storage(url, port, login, password):
     r = requests.delete(full_url, auth=HTTPDigestAuth(login, password), json=body)
     return r
 
-def upload_file(url, port, login, password, file, path:str='sd/'):
+def upload_file(url, port, password, file, login = 'admin', path:str='sd/'):
     endpoint = f'/api/v1/files/{path}'
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.put(full_url, files=file, auth=HTTPDigestAuth(login, password))
     return r
 
-def reboot(url, port, login, password):
+def reboot(url, port, password, login = 'admin'):
     endpoint = '/api/v1/control/reboot'
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.put(full_url, auth=HTTPDigestAuth(login, password))
     return r
 
-def capture_snapshot(url, port, login, password):
+def capture_snapshot(url, port, password, login = 'admin'):
     endpoint = '/api/v1/snapshot/'
     full_url = f'http://{url}:{port}{endpoint}'
     body = {
@@ -104,7 +104,7 @@ def capture_snapshot(url, port, login, password):
     r = requests.post(full_url, auth=HTTPDigestAuth(login, password), json=body)
     return r
 
-def capture_snapshot_thumbnail(url, port, login, password):
+def capture_snapshot_thumbnail(url, port, password, login = 'admin'):
     response = capture_snapshot(url, port, login, password)
     payload = response.text
     payload_json = json.loads(payload)
@@ -115,12 +115,12 @@ def capture_snapshot_thumbnail(url, port, login, password):
     image = Image.open(BytesIO(image_bytes))
     return image
 
-def get_device_name(url, port, login, password):
+def get_device_name(url, port, password, login = 'admin'):
     response = init_login(url, port, login, password)
     device_info = json.loads(response.text)
     return device_info['data']['result']['networking']['result']['name']
 
-def get_logs(url, port, login, password):
+def get_logs(url, port, password, login = 'admin'):
     endpoint = '/api/v1/logs/'
     full_url = f'http://{url}:{port}{endpoint}'
     r = requests.get(full_url, auth=HTTPDigestAuth(login, password))

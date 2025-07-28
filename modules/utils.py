@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import os, shutil, stat, time, subprocess, keyboard
+from .brightsign_API import credentials, ping, reachUrl, init_login
+from dataclasses import dataclass
 
 def st_init(key, state):
     if key not in st.session_state:
@@ -133,3 +135,77 @@ def shutdown():
     # Terminate streamlit python process
     time.sleep(2)
     os._exit(0)
+
+def menu(key):
+    c1,c2 = st.columns([1,1])
+    with c1:
+        if st.button('Single Player', use_container_width=True, disabled=False):
+            go_to(key, 'single_player')
+            st.rerun()
+    with c2:
+        if st.button('Multiple Players', use_container_width=True, disabled=False):
+            go_to(key, 'multi_player')
+            st.rerun()
+
+def single_player_input(key:str, next_step:str='single_verify', use_continue_button:bool=True):
+    '''
+    Goes to next_step or returns a bool. Sets following streamlit session states:
+    st.session_state.URL
+    st.session_state.password
+    st.session_state.serial
+    '''
+    st.markdown('Please fill out the following inputs:')
+    url = st.text_input('Player URL or IP address. Please do not include the 8080 port number.')
+    password = st.text_input('The player password',type='password')
+    serial = st.text_input('Player serial number (optional)')
+
+    if url.strip() == '' or password.strip() == '':
+        disable_continue = True
+    else:
+        st.session_state.url = url.strip()
+        st.session_state.password = password.strip()
+        st.session_state.serial = serial.strip()
+        disable_continue = False
+    if use_continue_button:
+        st.button('Continue', on_click=lambda: go_to(key, next_step), disabled=disable_continue)
+    else:
+        return not disable_continue
+    
+
+@dataclass
+class verify_player_info:
+    player: credentials
+    ping: bool
+    dws: bool
+    login: bool
+
+    def __init__(self, address:str, password:str, serial:str=None):
+        
+        ping_bool = ping(address)
+        self.ping = ping_bool
+
+        player = credentials(url=address, password=password, serial=serial)
+
+        dws_bool = reachUrl(player.url,player.primary_port)
+        if not dws_bool:
+            dws_bool = reachUrl(player.url, player.secondary_port)
+            if dws_bool:
+                player.primary_port = player.secondary_port
+        self.dws = dws_bool
+        if dws_bool:
+            api_login = init_login(url=player.url, port=player.primary_port, password=player.password)
+            if api_login.status_code == 200:
+                self.login = True
+            elif api_login.status_code == 401:
+                api_login = init_login(url=player.url, port=player.primary_port, password=player.serial)
+                if api_login.status_code == 200:
+                    player.password = player.serial
+                    self.login = True
+                else:
+                    self.login = False
+            else:
+                self.login = False
+        else:
+            self.login = False
+
+        self.player = player        
