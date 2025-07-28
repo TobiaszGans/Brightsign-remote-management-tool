@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-import os, shutil, stat, time, subprocess, keyboard
+import os, shutil, stat, time, subprocess, keyboard, threading
 from .brightsign_API import credentials, ping, reachUrl, init_login
 from dataclasses import dataclass
+from concurrent.futures import ThreadPoolExecutor
 
 def st_init(key, state):
     if key not in st.session_state:
@@ -92,42 +93,40 @@ def select_autourn():
                 autorun = file.read()
         return autorun
     
-def validate_csv(players:pd.DataFrame) -> list:
-    expected_columns = ['address','password','serial']
-    required_columns = set(['address','password'])
-    df_columns = players.columns.values.tolist()
-    df_columns_set = set(df_columns)
-    
-    columns_invalid = expected_columns != df_columns
+def validate_csv(players: pd.DataFrame) -> list:
+    expected_columns = {'address', 'password', 'serial'}
+    required_columns = {'address', 'password'}
+    df_columns_set = set(players.columns)
+
+    missing_columns = expected_columns - df_columns_set
     has_required_columns = required_columns.issubset(df_columns_set)
+
     if not has_required_columns:
         valid = False
-        error_message = "The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure."
-        return[valid, error_message]
+        error_message = f"The file must contain the columns: {', '.join(expected_columns)}. The uploaded file does not match this structure."
+        return [valid, error_message]
 
     address_invalid = players['address'].isna().any()
     password_invalid = players['password'].isna().any()
 
-    if columns_invalid or address_invalid or password_invalid:
+    if missing_columns or address_invalid or password_invalid:
         st.session_state['error'] = True
         error_message = "The uploaded file has the following issue(s): "
-
         issues = []
 
-        if columns_invalid:
-            issues.append("The file must contain the columns: 'address', 'password', and 'serial'. The uploaded file does not match this structure.")
+        if missing_columns:
+            issues.append(f"Missing columns: {', '.join(missing_columns)}.")
         if address_invalid:
-            issues.append("Some cells in the 'address' column are empty. All addresses must be provided.")
+            issues.append("Some cells in the 'address' column are empty.")
         if password_invalid:
-            issues.append("Some cells in the 'password' column are empty. All passwords must be provided.")
+            issues.append("Some cells in the 'password' column are empty.")
 
         error_message += " ".join(issues)
         valid = False
-        return[valid, error_message]
-    else:
-        valid = True
-        error_message = None
-        return[valid, error_message]
+        return [valid, error_message]
+
+    return [True, None]
+
     
 def shutdown():
     # Close streamlit browser tab
@@ -149,9 +148,9 @@ def menu(key):
 
 def single_player_input(key:str, next_step:str='single_verify', use_continue_button:bool=True):
     '''
-    Goes to next_step or returns a bool. Sets following streamlit session states:
-    st.session_state.URL
-    st.session_state.password
+    Goes to next_step or returns a bool. Sets following streamlit session states:\n
+    st.session_state.URL\n
+    st.session_state.password\n
     st.session_state.serial
     '''
     st.markdown('Please fill out the following inputs:')
@@ -208,4 +207,89 @@ class verify_player_info:
         else:
             self.login = False
 
-        self.player = player        
+        self.player = player
+
+def multi_player_input(key:str, next_step:str='multi_verify', performance_warining:bool= False, use_continue_button:bool=True):
+    '''
+    When use_continue_button is True (default): 
+    Sets a pandas Data Frame with the player info as st.session_state.players and goes to the next session state\n
+    When use_continue_button is False: 
+    Returns the Data Frame\n
+    Performance warning may be turned on by setting performance_warining to True.
+    '''
+
+    playerfile = st.file_uploader('Please upload a csv file containing device addresses, device passwords, and device serial numbers (optional).', type='csv')
+    template = upload_template()
+
+    if performance_warining:
+        st.info('Please keep in mind that going over 20 devices may result in performance issues.')
+
+    st.download_button('Download csv file template', data=template, file_name='Player upload template.csv')
+
+    if use_continue_button:
+        if playerfile == None:
+            disable_continue = True
+        else:
+            st.session_state.players = pd.read_csv(playerfile)
+            disable_continue = False
+        st.button('Continue', on_click=lambda:go_to(key, next_step), disabled=disable_continue)
+    else:
+        return pd.read_csv(playerfile)
+
+@dataclass    
+class multi_verify:
+    input_df:pd.DataFrame
+    output_df:pd.DataFrame
+    reject_df:pd.DataFrame
+    dropped_rows: int
+    contains_valid_records:bool
+    error_message:str
+
+    def __init__(self, df):
+        self.input_df = df
+        df['login'] = False
+        lock = threading.Lock()
+        
+        def verify_player(index, address: str, password: str, serial: str = None):
+            verify = verify_player_info(address, password, serial)
+            player = verify.player
+            if verify.ping and verify.dws and verify.login:
+                with lock:
+                    df.at[index, 'password'] = player.password
+                return True
+            return False
+
+        validation = validate_csv(df)
+        if not validation[0]:
+            self.output_df = None
+            self.dropped_rows = None
+            self.contains_valid_records = False
+            self.error_message = validation[1]
+            return
+        else:
+            with ThreadPoolExecutor(max_workers=50) as executor:
+                futures = [
+                    executor.submit(
+                        verify_player, idx, row['address'], row['password'], row['serial']
+                    )
+                    for idx, row in df.iterrows()
+                ]
+
+                results = [f.result() for f in futures]
+
+                    
+            df['login'] = results
+            self.reject_df = df[df['login'] == False].copy()
+            data_before_strip = df.shape[0]
+            df = df[df['login'] == True].copy()
+            data_after_strip = df.shape[0]
+            self.dropped_rows = data_before_strip - data_after_strip
+            if data_after_strip == 0:
+                self.contains_valid_records = False
+                self.error_message = 'Could not connect to any of the provided players.'
+                self.output_df = df
+                return
+            else:
+                self.contains_valid_records = True
+                self.output_df = df
+                self.error_message = None
