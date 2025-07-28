@@ -18,11 +18,7 @@ st.title('Reinstall Appspace on the player')
 
 if st.session_state[key] == 'menu':
     st.write('Select the mode.')
-    col1,col2 = st.columns([1,1])
-    with col1:
-        st.button('Single Player Mode', use_container_width=True, on_click=lambda: go_to(key, 'singleplayer'))
-    with col2:
-        st.button('Multi Player Mode', use_container_width=True, on_click=lambda: go_to(key, 'multiplayer'))
+    u.menu(key)
 
 elif st.session_state[key] == 'singleplayer':
     u.st_init('fail', False)

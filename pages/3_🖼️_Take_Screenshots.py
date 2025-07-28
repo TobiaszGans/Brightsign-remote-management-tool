@@ -19,34 +19,14 @@ u.st_init(key, 'menu')
 st.title('Take screenshot from the player')
 
 if st.session_state[key] == 'menu':
-    c1,c2 = st.columns([1,1])
-    with c1:
-        if st.button('Single Player', use_container_width=True, disabled=False):
-            go_to(key, 'single_player')
-            st.rerun()
-    with c2:
-        if st.button('Multiple Players', use_container_width=True, disabled=False):
-            go_to(key, 'multi_player')
-            st.rerun()
+    u.menu(key)
 
 
 elif st.session_state[key] == 'single_player':
     u.st_init('fail', False)
     if st.session_state.fail:
         st.error(st.session_state.error_message)
-    st.markdown('Please fill out the following inputs:')
-    url = st.text_input('Player URL or IP address. Please do not include the 8080 port number.')
-    password = st.text_input('The player password',type='password')
-    serial = st.text_input('Player serial number (optional)')
-
-    if url.strip() == '' or password.strip() == '':
-        disable_continue = True
-    else:
-        st.session_state.url = url.strip()
-        st.session_state.password = password.strip()
-        st.session_state.serial = serial.strip()
-        disable_continue = False
-    st.button('Continue', on_click=lambda: go_to(key, 'single_verify'), disabled=disable_continue)
+    u.single_player_input(key)
 
 elif st.session_state[key] == 'single_verify':
     url = st.session_state.url
