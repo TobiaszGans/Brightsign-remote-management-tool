@@ -20,7 +20,7 @@ if st.session_state[key] == 'menu':
     st.write('Select the mode.')
     u.menu(key)
 
-elif st.session_state[key] == 'singleplayer':
+elif st.session_state[key] == 'single_player':
     u.st_init('fail', False)
     if st.session_state.fail:
         st.error(st.session_state.error_message)
@@ -253,7 +253,7 @@ elif st.session_state[key] == 'reboot':
     
 
 
-elif st.session_state[key] == 'multiplayer':
+elif st.session_state[key] == 'multi_player':
     u.st_init('error', False)
     if st.session_state.error:
         st.error(st.session_state.error_message)

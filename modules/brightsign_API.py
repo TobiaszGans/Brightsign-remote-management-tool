@@ -105,7 +105,7 @@ def capture_snapshot(url, port, password, login = 'admin'):
     return r
 
 def capture_snapshot_thumbnail(url, port, password, login = 'admin'):
-    response = capture_snapshot(url, port, login, password)
+    response = capture_snapshot(url, port, password)
     payload = response.text
     payload_json = json.loads(payload)
     base64_image = payload_json['data']['result']['remoteSnapshotThumbnail']
@@ -115,8 +115,8 @@ def capture_snapshot_thumbnail(url, port, password, login = 'admin'):
     image = Image.open(BytesIO(image_bytes))
     return image
 
-def get_device_name(url, port, password, login = 'admin'):
-    response = init_login(url, port, login, password)
+def get_device_name(url, port, password):
+    response = init_login(url, port, password)
     device_info = json.loads(response.text)
     return device_info['data']['result']['networking']['result']['name']
 

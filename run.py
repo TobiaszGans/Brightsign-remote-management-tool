@@ -6,7 +6,7 @@ import time
 
 setup.clearTerminal()
 
-APP_VERSION = 'v.0.1.2-beta'
+APP_VERSION = 'v.0.1.3-beta'
 
 # Check if running in a virtual enviorment
 if not setup.is_virtual_environment():

@@ -87,7 +87,7 @@ elif st.session_state[key] == 'single_verify':
                 st.rerun()
             else:
                 response = response
-                device_name = bsp.get_device_name(url=url, port=port, login=login, password=password)
+                device_name = bsp.get_device_name(url=url, port=port, password=password)
                 st.write('Success')
             st.session_state.device_name = device_name
             st.session_state.port = port
@@ -197,7 +197,7 @@ elif st.session_state[key] == 'multi_verify':
 
 elif st.session_state[key] == 'convert_multi':
     def get_name_threaded(row):
-        return bsp.get_device_name(url=row['address'], port=8080, login='admin', password=row['password'])
+        return bsp.get_device_name(url=row['address'], port=8080, password=row['password'])
     
     players = st.session_state.players
     with st.spinner('Requesting device names'):
