@@ -230,6 +230,8 @@ elif st.session_state[key] == 'convert_multi':
 
 
 elif st.session_state[key] == 'multi_generate':
+    u.st_init('auto_refresh', False)
+    u.st_init('refresh_time', 15)
     players = st.session_state.players
     lock = threading.Lock()
     u.st_init('toasted', False)
@@ -306,6 +308,23 @@ elif st.session_state[key] == 'display_screenshots':
             else:
                 st.image(screenshot)
     st.button('Refresh', on_click=lambda: go_to(key, 'multi_generate'), key='refresh2')
+
+    if not st.session_state.auto_refresh:
+        if st.button('Turn On automatic refresh'):
+            go_to('auto_refresh', True)
+            st.rerun()
+    elif st.session_state.auto_refresh:
+        if st.button('Turn Off automatic refresh'):
+            go_to('auto_refresh', False)
+            st.rerun()
+        time.sleep(st.session_state.refresh_time)
+        go_to(key, 'multi_generate')
+        st.rerun()
+    refresh_time = st.slider('Refresh Time', min_value=5, max_value=60, value=st.session_state.refresh_time)
+    if st.session_state.refresh_time != refresh_time:
+        st.session_state.refresh_time = refresh_time
+        st.rerun()
+
 
 # Menu Button
 if st.session_state[key] != 'menu':

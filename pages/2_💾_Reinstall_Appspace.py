@@ -195,7 +195,7 @@ elif st.session_state[key] == 'upload':
         files = files = {
                 'file[0]': ('autorun.zip', bytes_data, 'application/zip')
             }
-        response = bsp.upload_file(url=login_info.url, port=port, login=login_info.login, password=login_info.password, file=files)
+        response = bsp.upload_file(url=login_info.url, port=port, password=login_info.password, file=files)
         if response.status_code == 200:
             st.write('Success')
             time.sleep(1)
@@ -208,13 +208,13 @@ elif st.session_state[key] == 'reboot':
     st.write('Rebooting the player')
     login_info = st.session_state.login_info
     port = st.session_state.port
-    reboot = bsp.reboot(url=login_info.url, port=port, login=login_info.login, password=login_info.password)
+    reboot = bsp.reboot(url=login_info.url, port=port, password=login_info.password)
     if reboot.status_code == 200:
         st.write('Command sent successfully.')
     else:
         st.write('Command failed, trying again in 10 seconds')
         time.sleep(10)
-        reboot = bsp.reboot(url=login_info.url, port=port, login=login_info.login, password=login_info.password)
+        reboot = bsp.reboot(url=login_info.url, port=port, password=login_info.password)
         if reboot.status_code != 200:
             st.session_state.error_message = 'Failed to reboot the player'
             st.session_state.fail = True
