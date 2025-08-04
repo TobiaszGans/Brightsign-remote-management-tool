@@ -209,7 +209,7 @@ class verify_player_info:
 
         self.player = player
 
-def multi_player_input(key:str, next_step:str='multi_verify', performance_warining:bool= False, use_continue_button:bool=True):
+def multi_player_input(key:str, next_step:str='multi_verify', performance_warining:bool= False, use_continue_button:bool=True, custom_template=None):
     '''
     When use_continue_button is True (default): 
     Sets a pandas Data Frame with the player info as st.session_state.players and goes to the next session state\n
@@ -219,7 +219,10 @@ def multi_player_input(key:str, next_step:str='multi_verify', performance_warini
     '''
 
     playerfile = st.file_uploader('Please upload a csv file containing device addresses, device passwords, and device serial numbers (optional).', type='csv')
-    template = upload_template()
+    if custom_template is None:
+        template = upload_template()
+    else:
+        template = custom_template
 
     if performance_warining:
         st.info('Please keep in mind that going over 20 devices may result in performance issues.')

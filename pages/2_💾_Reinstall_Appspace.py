@@ -239,8 +239,11 @@ elif st.session_state[key] == 'reboot':
                 dws = bsp.reachUrl(login_info.url, port)
                 attempt = attempt + 1
                 time.sleep(2)
+        go_to(key, 'single_success')
+        st.rerun()
 
-        st.write('Complete. Please verify')
+elif st.session_state[key] == 'single_success':
+    st.success('Complete. Please verify')
     
     c1, c2, c3 = st.columns([1,1,1])
     with c3:    
